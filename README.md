@@ -17,25 +17,89 @@ move. Written in Python with tkinter, so it runs on the standard library alone.
 └────────┴────────┴────────┴────────┴────────┴────────┴────────────────────┘
 ```
 
-## Running it
+## Quick start
+
+Requires **Python 3.9 or newer** (3.11+ recommended).
 
 ```bash
-python main.py                      # opens trip_calendar.xml, or starts a fresh month
-python main.py example_trip.xml     # opens the bundled sample trip
-```
+git clone https://github.com/doofx/tripCalendar2.git
+cd tripCalendar2
 
-tkinter comes with Python on the python.org installers for Windows and macOS. On
-Linux it is a separate package:
+python -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
-```bash
-sudo apt install python3-tk      # Debian / Ubuntu
-sudo dnf install python3-tkinter # Fedora
-```
-
-Saving the calendar as an image needs Pillow:
-
-```bash
 pip install -r requirements.txt
+python main.py example_trip.xml
+```
+
+The window opens on the bundled Japan itinerary: five weeks, Sunday in the first
+column, every day an editable box.
+
+### tkinter
+
+The GUI uses tkinter, which is part of the standard library — but on Linux it is
+packaged separately, so install it with the system package manager rather than
+pip:
+
+```bash
+sudo apt install python3-tk        # Debian / Ubuntu / Mint
+sudo dnf install python3-tkinter   # Fedora / RHEL
+sudo pacman -S tk                  # Arch
+```
+
+Windows and macOS get it from the python.org installer. Check with:
+
+```bash
+python -c "import tkinter; print(tkinter.TkVersion)"
+```
+
+## Worked example
+
+Start from the sample trip and move a day:
+
+```bash
+python main.py example_trip.xml
+```
+
+1. **Type a plan.** Click 10 March — "Going to Matsumoto" — and add a line. The
+   row grows to fit as you type.
+2. **Tighten the range.** Click **Trim empty weeks**. The blank week after the
+   flight home disappears, leaving four weeks ending 25 March.
+3. **Absorb a delay.** Kyoto needs one more night. Click **09 March**, then
+   **Move Right ▶**. 09 March empties out and everything from Arashiyama onward
+   slides one day later — including the landing on 25 March, which now falls on
+   26 March. That is past the end of the range, so a fifth week is appended to
+   hold it rather than dropping the day.
+4. **Change your mind.** The Arashiyama text now sits on 10 March. Select it and
+   click **◀ Move Left** to pull the whole tail back where it was. Had the day
+   before held text, you would be asked before it was overwritten.
+5. **Save.** `Ctrl+S` writes the plan back to `example_trip.xml`, stamped with
+   the version, a new revision number and the time. The status bar shows all
+   three.
+6. **Export.** `Ctrl+E`, or straight from the shell without opening a window:
+
+```bash
+python main.py example_trip.xml --export japan.jpg --scale 3
+# Wrote japan.jpg
+```
+
+Starting a trip of your own:
+
+```bash
+cp example_trip.xml my_trip.xml     # or just: python main.py my_trip.xml
+python main.py my_trip.xml
+```
+
+Opening a path that does not exist starts an empty four-week calendar beginning
+this week; set the real dates under **Settings**, or edit `startWeek` and
+`endWeek` in the file. Running `python main.py` with no arguments uses
+`trip_calendar.xml` in the current directory.
+
+Other command-line options:
+
+```bash
+python main.py --help              # all options
+python main.py --version           # version and build timestamp
 ```
 
 ## Features
@@ -140,6 +204,8 @@ that text is never hidden.
 | `tripcalendar/theme.py` | Palettes shared by the window and the export |
 | `tripcalendar/version.py` | Version number and build timestamp |
 | `example_trip.xml` | A sample trip to open |
+| `requirements.txt` | Runtime dependencies |
+| `requirements-dev.txt` | Test and lint tooling |
 | `tests/` | Unit tests for the model, the XML layer and text layout |
 
 ## Tests

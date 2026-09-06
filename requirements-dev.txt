@@ -1,0 +1,9 @@
+# Everything in requirements.txt, plus tooling for working on the code.
+-r requirements.txt
+
+# Test runner (the suite also runs under plain `python -m unittest`).
+pytest>=7.0.0
+
+# Linting and formatting.
+ruff>=0.4.0
+black>=24.1.0

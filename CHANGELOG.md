@@ -5,6 +5,15 @@ The application writes the same pair into each saved plan (`appVersion`,
 `savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
 always says which version last touched it and when.
 
+## 1.0.1 — 2026-09-06T19:45:00+00:00
+
+- `requirements.txt` now spells out the full runtime dependency set and how to
+  get tkinter on each platform; `requirements-dev.txt` added for tooling.
+- README gained a copy-paste quick start and a worked example that walks a real
+  day-shift through the sample trip.
+- The walkthrough is covered by tests, so the documented steps cannot drift from
+  what the code actually does.
+
 ## 1.0.0 — 2026-09-06T00:00:00+00:00
 
 First release.
