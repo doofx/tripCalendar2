@@ -21,6 +21,7 @@ from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import config as config_module
 from . import imaging
+from . import message as message_module
 from . import paths
 from . import session as session_module
 from . import theme as theme_module
@@ -365,6 +366,9 @@ class TripCalendarApp(tk.Tk):
         file_menu.add_command(label="Save", command=self.action_save)
         file_menu.add_command(label="Save As…", command=self.action_save_as)
         file_menu.add_command(label="Export as JPG…", command=self.action_export)
+        file_menu.add_command(
+            label="Export as text message…", command=self.action_message
+        )
         file_menu.add_separator()
         file_menu.add_command(label="Quit", command=self.on_close)
         menubar.add_cascade(label="File", menu=file_menu)
@@ -494,6 +498,9 @@ class TripCalendarApp(tk.Tk):
         ).pack(side="left", padx=(0, 6))
         ttk.Button(
             right, text="Save as image", style="Tool.TButton", command=self.action_export
+        ).pack(side="left", padx=(0, 6))
+        ttk.Button(
+            right, text="Text message", style="Tool.TButton", command=self.action_message
         ).pack(side="left", padx=(0, 6))
         ttk.Button(
             right, text="Save", style="Accent.TButton", command=self.action_save
@@ -891,6 +898,18 @@ class TripCalendarApp(tk.Tk):
             return
         self.refresh_status(f"Exported {os.path.basename(written)}")
 
+    def action_message(self) -> None:
+        """Show the trip as one line per day, ready to paste into a message."""
+        self.flush()
+        if not self.calendar.entries:
+            messagebox.showinfo(
+                "Nothing to summarise",
+                "Write something into at least one day first.",
+                parent=self,
+            )
+            return
+        MessageDialog(self)
+
     def action_settings(self) -> None:
         self.flush()
         SettingsDialog(self)
@@ -1090,6 +1109,187 @@ class SettingsDialog(tk.Toplevel):
         if grown:
             app.refresh_status(f"Range grown by {grown} week(s) to keep existing text visible")
         self.destroy()
+
+
+class MessageDialog(tk.Toplevel):
+    """The trip as one line per day, ready to copy into a chat or an SMS.
+
+    The text is editable: it is a starting point to trim before sending, not a
+    fixed report. The controls change how much of each day is folded into its
+    line, and re-render as they are touched.
+    """
+
+    LINE_CHOICES = (1, 2, 3)
+
+    def __init__(self, app: TripCalendarApp) -> None:
+        super().__init__(app)
+        self.app = app
+        palette = app.palette
+
+        self.title("Text message summary")
+        self.configure(background=palette.page, padx=16, pady=14)
+        self.transient(app)
+        self.minsize(460, 420)
+        self.geometry("560x560")
+
+        self.lines_var = tk.IntVar(value=2)
+        self.header_var = tk.BooleanVar(value=True)
+        self.dates_var = tk.BooleanVar(value=False)
+
+        tk.Label(
+            self,
+            text="One line per day",
+            font=app.f_title,
+            background=palette.page,
+            foreground=palette.text,
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            self,
+            text="Lines below the ones kept are dropped, and \u201cSleep: \u2026\u201d "
+            "is passed over rather than spent as one of them.",
+            font=app.f_subtitle,
+            background=palette.page,
+            foreground=palette.muted,
+            anchor="w",
+            justify="left",
+            wraplength=520,
+        ).pack(fill="x", pady=(2, 10))
+
+        controls = tk.Frame(self, background=palette.page)
+        controls.pack(fill="x", pady=(0, 8))
+        tk.Label(
+            controls,
+            text="Lines per day",
+            font=app.f_subtitle,
+            background=palette.page,
+            foreground=palette.text,
+        ).pack(side="left", padx=(0, 6))
+        for count in self.LINE_CHOICES:
+            ttk.Radiobutton(
+                controls,
+                text=str(count),
+                value=count,
+                variable=self.lines_var,
+                command=self.rerender,
+            ).pack(side="left", padx=(0, 6))
+        ttk.Checkbutton(
+            controls,
+            text="Title line",
+            variable=self.header_var,
+            command=self.rerender,
+        ).pack(side="left", padx=(14, 6))
+        ttk.Checkbutton(
+            controls, text="Dates", variable=self.dates_var, command=self.rerender
+        ).pack(side="left")
+
+        body = tk.Frame(self, background=palette.page)
+        body.pack(fill="both", expand=True)
+        self.text = tk.Text(
+            body,
+            wrap="word",
+            font=app.f_body,
+            background=palette.surface,
+            foreground=palette.text,
+            insertbackground=palette.accent,
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=palette.border,
+            padx=10,
+            pady=8,
+            undo=True,
+        )
+        scroll = ttk.Scrollbar(
+            body, orient="vertical", command=self.text.yview, style="Vertical.TScrollbar"
+        )
+        self.text.configure(yscrollcommand=scroll.set)
+        scroll.pack(side="right", fill="y")
+        self.text.pack(side="left", fill="both", expand=True)
+        self.text.bind("<KeyRelease>", lambda _e: self.refresh_count())
+
+        self.count = tk.Label(
+            self,
+            text="",
+            font=app.f_status,
+            background=palette.page,
+            foreground=palette.muted,
+            anchor="w",
+        )
+        self.count.pack(fill="x", pady=(8, 10))
+
+        buttons = tk.Frame(self, background=palette.page)
+        buttons.pack(fill="x")
+        ttk.Button(
+            buttons, text="Close", style="Tool.TButton", command=self.destroy
+        ).pack(side="right")
+        ttk.Button(
+            buttons, text="Save as .txt", style="Tool.TButton", command=self.save_text
+        ).pack(side="right", padx=(0, 8))
+        ttk.Button(
+            buttons, text="Copy", style="Accent.TButton", command=self.copy
+        ).pack(side="right", padx=(0, 8))
+
+        self.rerender()
+        self.bind("<Escape>", lambda _e: self.destroy())
+
+    # ----------------------------------------------------------------- text
+
+    def style(self) -> message_module.MessageStyle:
+        return message_module.MessageStyle(
+            lines=self.lines_var.get(),
+            include_header=self.header_var.get(),
+            show_dates=self.dates_var.get(),
+            date_format=self.app.doc.settings.date_format,
+        )
+
+    def rerender(self) -> None:
+        self.text.delete("1.0", "end")
+        self.text.insert("1.0", message_module.render(self.app.doc, self.style()))
+        self.refresh_count()
+
+    def value(self) -> str:
+        return self.text.get("1.0", "end-1c")
+
+    def refresh_count(self) -> None:
+        body = self.value()
+        characters = len(body)
+        days = len([line for line in body.splitlines() if " - " in line])
+        # 160 is one SMS; chat apps do not care, but it is a useful yardstick.
+        messages = max(1, -(-characters // 160))
+        self.count.configure(
+            text=f"{days} days · {characters} characters · about {messages} SMS"
+        )
+
+    # -------------------------------------------------------------- actions
+
+    def copy(self) -> None:
+        body = self.value()
+        self.clipboard_clear()
+        self.clipboard_append(body)
+        self.update()  # make the clipboard survive this window closing
+        self.count.configure(text=f"Copied {len(body)} characters to the clipboard")
+
+    def save_text(self) -> None:
+        suggested = (
+            os.path.splitext(os.path.basename(self.app.doc.path))[0] or "trip"
+        ) + ".txt"
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            title="Save text message",
+            defaultextension=".txt",
+            filetypes=[("Text file", "*.txt"), ("All files", "*.*")],
+            initialdir=paths.app_dir(),
+            initialfile=suggested,
+        )
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8", newline="\n") as handle:
+                handle.write(self.value() + "\n")
+        except OSError as exc:
+            messagebox.showerror("Could not save", str(exc), parent=self)
+            return
+        self.count.configure(text=f"Saved to {os.path.abspath(path)}")
 
 
 def run(

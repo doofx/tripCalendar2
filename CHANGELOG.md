@@ -5,6 +5,26 @@ The application writes the same pair into each saved plan (`appVersion`,
 `savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
 always says which version last touched it and when.
 
+## 1.1.0 — 2026-09-06T21:15:00+00:00
+
+- **New export: a text message summary.** One line per day, short enough to
+  paste into a chat:
+
+      day 1 - Flight to Dubrovnik + tour
+      day 2 - Kravica waterfall + Mostar
+
+  The opening lines of each day are joined into one, lines below them are
+  dropped, and housekeeping lines ("Sleep: Kyoto") are passed over rather than
+  spent as one of the kept lines. Day numbers count from the first day with
+  anything written on it. **Text message** opens a preview that can be edited
+  before sending, with Copy and Save as .txt, a character count, and controls
+  for how many lines per day to keep, whether to show the title line, and
+  whether to show dates.
+- From the command line: `--message` prints the summary, `--message FILE.txt`
+  writes it, and `--message-lines N` sets how much of each day to keep.
+- No change to the XML format: the message options are chosen per export rather
+  than stored in the plan.
+
 ## 1.0.4 — 2026-09-06T20:50:00+00:00
 
 - **Application keyboard shortcuts removed.** Ctrl+Left and Ctrl+Right were

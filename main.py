@@ -15,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from tripcalendar import __version__, config, imaging, paths, session
+from tripcalendar import __version__, config, imaging, message, paths, session
 from tripcalendar.version import BUILD_TIMESTAMP
 
 
@@ -36,6 +36,21 @@ def build_parser() -> argparse.ArgumentParser:
         "--export",
         metavar="FILE.jpg",
         help="render the calendar to a JPG and exit, without opening a window",
+    )
+    parser.add_argument(
+        "--message",
+        nargs="?",
+        const="-",
+        metavar="FILE.txt",
+        help="write a one-line-per-day summary suitable for a text message and "
+        "exit; with no filename it is printed to the screen",
+    )
+    parser.add_argument(
+        "--message-lines",
+        type=int,
+        default=2,
+        metavar="N",
+        help="how many lines of each day to fold into its summary (default: 2)",
     )
     parser.add_argument(
         "--scale",
@@ -73,6 +88,20 @@ def main(argv: list[str] | None = None) -> int:
     except (config.ConfigError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
+
+    if args.message:
+        style = message.MessageStyle(lines=max(1, args.message_lines))
+        text = message.render(doc, style)
+        if args.message == "-":
+            print(text)
+            return 0
+        try:
+            written = message.save(doc, args.message, style)
+        except OSError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 3
+        print(f"Wrote {written}")
+        return 0
 
     if args.export:
         try:

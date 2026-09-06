@@ -101,6 +101,8 @@ Other command-line options:
 ```bash
 python main.py --help              # all options
 python main.py --version           # version and build timestamp
+python main.py --message           # print the trip as one line per day
+python main.py --config-dir        # where plans and settings are kept
 ```
 
 ## Features
@@ -138,6 +140,37 @@ render is available headlessly:
 
 ```bash
 python main.py config/example_trip.xml --export japan.jpg --scale 3
+```
+
+**Text message summary.** *Text message* folds the whole trip into one line per
+day, short enough to paste into a chat:
+
+```
+Japan, Spring 2023 (28/02/2023–25/03/2023)
+day 1 - Flight to Tokyo at 20:00
+day 2 - Tokyo, land at 19:10
+day 3 - Going to Osaka + Arrive at noon
+day 4 - Osaka
+```
+
+The opening lines of a day are what carry the plan — where you are going and
+what you are doing — so those are joined together and the lines below them are
+dropped. Housekeeping lines are passed over rather than spent as one of the
+kept lines, which is why day 4 above reads `Osaka` and not `Osaka + Sleep:
+Osaka`. A day that is *only* housekeeping still gets a line, rather than
+disappearing from the trip. Day numbers count from the first day with anything
+written on it, so day 1 is the first day of the trip and not the first cell of
+the grid; blank days in the middle are left out but still counted, so the
+numbers stay true to the dates.
+
+The preview is editable before you copy it, shows a character count, and has
+controls for how many lines per day to keep (1–3), whether to include the title
+line, and whether to show dates. Or from the shell:
+
+```bash
+python main.py config/example_trip.xml --message                 # print it
+python main.py config/example_trip.xml --message trip.txt        # write it
+python main.py config/example_trip.xml --message --message-lines 1
 ```
 
 **Everything persists.** *Save* writes the range, the look and feel, the text of
@@ -239,6 +272,7 @@ your platform intends:
 | `tripcalendar/config.py` | XML load and save, settings, change history |
 | `tripcalendar/ui.py` | The tkinter window |
 | `tripcalendar/imaging.py` | JPG rendering |
+| `tripcalendar/message.py` | The one-line-per-day text summary |
 | `tripcalendar/theme.py` | Palettes shared by the window and the export |
 | `tripcalendar/version.py` | Version number and build timestamp |
 | `tripcalendar/paths.py` | Where the config folder is |
