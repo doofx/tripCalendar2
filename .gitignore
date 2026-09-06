@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Trip Calendar working files
+trip_calendar.xml
+*.xml.tmp
+*.jpg
+!docs/*.jpg

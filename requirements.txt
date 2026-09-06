@@ -1,0 +1,3 @@
+# The GUI itself runs on the standard library alone (tkinter ships with Python).
+# Pillow is needed only for "Save as image" / --export.
+Pillow>=9.0

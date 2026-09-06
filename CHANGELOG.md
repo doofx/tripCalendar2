@@ -1,0 +1,27 @@
+# Changelog
+
+Every release records its version number and the timestamp of the change.
+The application writes the same pair into each saved plan (`appVersion`,
+`savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
+always says which version last touched it and when.
+
+## 1.0.0 — 2026-09-06T00:00:00+00:00
+
+First release.
+
+- Week-per-row calendar grid; every row is one week running left to right,
+  starting on Sunday (Monday selectable).
+- Every day is an editable text box; rows grow to fit the wordiest day.
+- **Move Left / Move Right**: the selected day and every day after it slide one
+  day earlier or later. A forward shift that would push text past the end of the
+  range appends a week instead of dropping it; a backward shift from the first
+  visible day prepends one. A backward shift that would overwrite text on the
+  preceding day asks before doing it.
+- Displayed range configured in XML (`startWeek` / `endWeek`), or from the
+  in-app settings dialog; any date inside the wanted week will do.
+- Save the whole plan — settings, day text and change history — to XML.
+- Export the calendar to a JPG, drawn from the model so the image does not
+  depend on window size or scroll position.
+- Two themes (`aurora`, `midnight`), adjustable cell size and font scale.
+- Command line: `--export FILE.jpg` renders headlessly; `--version` prints the
+  version and build timestamp.

@@ -1,0 +1,83 @@
+<?xml version='1.0' encoding='utf-8'?>
+<tripCalendar schemaVersion="1" appVersion="1.0.0" revision="1" savedAt="2026-09-06T19:28:46+00:00">
+  <settings>
+    <startWeek>2023-02-26</startWeek>
+    <endWeek>2023-04-01</endWeek>
+    <firstDayOfWeek>sunday</firstDayOfWeek>
+    <title>Japan, Spring 2023</title>
+    <theme>aurora</theme>
+    <dateFormat>%d/%m/%Y</dateFormat>
+    <cellWidth>168</cellWidth>
+    <cellHeight>132</cellHeight>
+    <fontScale>1</fontScale>
+    <window />
+  </settings>
+  <days>
+    <day date="2023-02-28">Flight to Tokyo at 20:00</day>
+    <day date="2023-03-01">Tokyo, land at 19:10
+Sleep: Tokyo</day>
+    <day date="2023-03-02">Going to Osaka
+Arrive at noon
+Sleep: Osaka</day>
+    <day date="2023-03-03">Osaka
+Sleep: Osaka</day>
+    <day date="2023-03-04">Osaka
+Send luggage to Kyoto
+Sleep: Osaka</day>
+    <day date="2023-03-05">Going to Akame 48 Falls
+Sleep: Kyoto</day>
+    <day date="2023-03-06">Kyoto
+Mibu Kyogen festival?
+Sleep: Kyoto</day>
+    <day date="2023-03-07">Kyoto temples
+Inari &amp; Shinko Matsuri festival?
+Sleep: Kyoto</day>
+    <day date="2023-03-08">Kyoto - day trip to Nara + Fushimi Inari temple
+Sleep: Kyoto</day>
+    <day date="2023-03-09">Kyoto
+Arashiyama
+Sleep: Kyoto</day>
+    <day date="2023-03-10">Going to Matsumoto
+Stop at Toyota Kaikan Museum near Nagoya
+Pick up car until 19:30
+Sleep: Matsumoto</day>
+    <day date="2023-03-11">Matsumoto castle
+Going to Hirooka by car
+Sleep: Takayama (ryokan)</day>
+    <day date="2023-03-12">Kamikochi
+Mt. Opening Festival
+Sleep: Takayama</day>
+    <day date="2023-03-13">Shirakawa-go - Kanazawa - Toyama
+Return car until 19:30
+Sleep: Toyama</day>
+    <day date="2023-03-14">Alpine route
+Sleep: Matsumoto</day>
+    <day date="2023-03-15">Going to Kofu
+Day trip at Kofu
+Sleep: Kofu</day>
+    <day date="2023-03-16">Going to Kawaguchiko
+Sleep: Kawaguchiko</day>
+    <day date="2023-03-17">Kawaguchiko
+Going to Tokyo
+Sleep: Tokyo</day>
+    <day date="2023-03-18">Tokyo
+Wisteria Matsuri festival? 21/4-6/5
+Sleep: Tokyo</day>
+    <day date="2023-03-19">Tokyo
+Day trip - Hakone?
+Sleep: Tokyo</day>
+    <day date="2023-03-20">Tokyo
+Sleep: Tokyo</day>
+    <day date="2023-03-21">Tokyo
+Sleep: Tokyo</day>
+    <day date="2023-03-22">Tokyo
+Sleep: Tokyo</day>
+    <day date="2023-03-23">Tokyo
+Sleep: Tokyo</day>
+    <day date="2023-03-24">Flight home at 21:35</day>
+    <day date="2023-03-25">Land at 08:40</day>
+  </days>
+  <history>
+    <change revision="1" at="2026-09-06T19:28:46+00:00" version="1.0.0">Created the example trip plan</change>
+  </history>
+</tripCalendar>
