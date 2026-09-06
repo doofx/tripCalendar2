@@ -29,7 +29,7 @@ python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 
 pip install -r requirements.txt
-python main.py example_trip.xml
+python main.py config/example_trip.xml
 ```
 
 The window opens on the bundled Japan itinerary: five weeks, Sunday in the first
@@ -58,7 +58,7 @@ python -c "import tkinter; print(tkinter.TkVersion)"
 Start from the sample trip and move a day:
 
 ```bash
-python main.py example_trip.xml
+python main.py config/example_trip.xml
 ```
 
 1. **Type a plan.** Click 10 March — "Going to Matsumoto" — and add a line. The
@@ -73,21 +73,21 @@ python main.py example_trip.xml
 4. **Change your mind.** The Arashiyama text now sits on 10 March. Select it and
    click **◀ Move Left** to pull the whole tail back where it was. Had the day
    before held text, you would be asked before it was overwritten.
-5. **Save.** `Ctrl+S` writes the plan back to `example_trip.xml`, stamped with
+5. **Save.** `Ctrl+S` writes the plan back to `config/example_trip.xml`, stamped with
    the version, a new revision number and the time. The status bar shows all
    three.
 6. **Export.** `Ctrl+E`, or straight from the shell without opening a window:
 
 ```bash
-python main.py example_trip.xml --export japan.jpg --scale 3
+python main.py config/example_trip.xml --export japan.jpg --scale 3
 # Wrote japan.jpg
 ```
 
 Starting a trip of your own:
 
 ```bash
-cp example_trip.xml my_trip.xml     # or just: python main.py my_trip.xml
-python main.py my_trip.xml
+cp config/example_trip.xml config/my_trip.xml
+python main.py my_trip.xml            # a bare name means config/my_trip.xml
 ```
 
 Opening a path that does not exist starts an empty four-week calendar beginning
@@ -130,12 +130,23 @@ resolution regardless of the window size or where you had scrolled to. The same
 render is available headlessly:
 
 ```bash
-python main.py example_trip.xml --export japan.jpg --scale 3
+python main.py config/example_trip.xml --export japan.jpg --scale 3
 ```
 
 **Everything persists.** *Save* writes the range, the look and feel, the text of
-every day and the change history back to the XML file. Window geometry is saved
-on exit, so the app reopens the way you left it.
+every day and the change history back to the XML file, and the status bar tells
+you the full path it went to.
+
+Files live in a `config` folder next to the application, never in whatever
+directory the app happened to be started from — so a saved plan is always
+somewhere you can find it again. There is always a config file in use:
+`config/trip_calendar.xml` is created on the first run, so *Save* always has a
+destination.
+
+Starting the app with no arguments reopens **the last plan you had open**. That
+choice, and the window position, live in `config/app_state.xml`, separately from
+the trip itself — moving the window is not an edit to your plan, so it never
+makes the app ask whether you want to save.
 
 **Version and timestamp of every change.** Each save stamps the file with the
 application version, the wall-clock time and a revision counter, and appends a
@@ -163,7 +174,6 @@ boundaries when loaded, so you do not have to look up which day was a Sunday.
     <cellWidth>168</cellWidth>
     <cellHeight>132</cellHeight>
     <fontScale>1</fontScale>
-    <window>1360x880+120+60</window>
   </settings>
   <days>
     <day date="2023-02-28">Flight to Tokyo at 20:00</day>
@@ -203,7 +213,11 @@ that text is never hidden.
 | `tripcalendar/imaging.py` | JPG rendering |
 | `tripcalendar/theme.py` | Palettes shared by the window and the export |
 | `tripcalendar/version.py` | Version number and build timestamp |
-| `example_trip.xml` | A sample trip to open |
+| `tripcalendar/paths.py` | Where the config folder is |
+| `tripcalendar/session.py` | Last-opened plan and window position |
+| `config/example_trip.xml` | A sample trip to open |
+| `config/trip_calendar.xml` | Your plan, created on first run |
+| `config/app_state.xml` | Which plan to reopen, and where the window was |
 | `requirements.txt` | Runtime dependencies |
 | `requirements-dev.txt` | Test and lint tooling |
 | `tests/` | Unit tests for the model, the XML layer and text layout |

@@ -217,8 +217,10 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Trip Calendar working files
-trip_calendar.xml
+# Trip Calendar working files: the config folder is tracked, but the plan you
+# are actually editing and the app's own state are yours, not the repo's.
+config/trip_calendar.xml
+config/app_state.xml
 *.xml.tmp
 *.jpg
 !docs/*.jpg

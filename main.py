@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 """Entry point for the Trip Calendar GUI.
 
-    python main.py                          # open trip_calendar.xml (or start fresh)
-    python main.py my_trip.xml              # open a specific plan
-    python main.py my_trip.xml --export out.jpg   # render to JPG without a window
+    python main.py                              # reopen the last plan you had open
+    python main.py config/example_trip.xml      # open a specific plan
+    python main.py japan.xml                    # a bare name means config/japan.xml
+    python main.py --export out.jpg             # render to JPG without a window
+
+Plans live in the ``config`` folder next to this file, so a saved plan is always
+somewhere findable no matter which directory the app was started from.
 """
 
 from __future__ import annotations
@@ -11,7 +15,7 @@ from __future__ import annotations
 import argparse
 import sys
 
-from tripcalendar import __version__, config, imaging
+from tripcalendar import __version__, config, imaging, paths, session
 from tripcalendar.version import BUILD_TIMESTAMP
 
 
@@ -19,12 +23,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="trip-calendar",
         description="Plan a trip on a week-per-row calendar of editable day boxes.",
+        epilog=f"Plans and settings are kept in: {paths.config_dir()}",
     )
     parser.add_argument(
-        "config",
+        "plan",
         nargs="?",
-        default=config.DEFAULT_CONFIG_PATH,
-        help=f"XML plan to open (default: {config.DEFAULT_CONFIG_PATH})",
+        default=None,
+        help="XML plan to open; a bare filename is looked up in the config folder "
+        "(default: the plan you had open last, otherwise config/trip_calendar.xml)",
     )
     parser.add_argument(
         "--export",
@@ -38,6 +44,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="resolution multiplier for --export (default: 2.0)",
     )
     parser.add_argument(
+        "--config-dir",
+        action="store_true",
+        help="print the folder holding plans and settings, then exit",
+    )
+    parser.add_argument(
         "--version",
         action="version",
         version=f"Trip Calendar {__version__} (built {BUILD_TIMESTAMP})",
@@ -48,9 +59,18 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
 
+    if args.config_dir:
+        print(paths.config_dir())
+        return 0
+
+    state = session.load()
+    plan_path = session.startup_plan_path(args.plan, state)
+
     try:
-        doc = config.load(args.config)
-    except config.ConfigError as exc:
+        # Creates the file when it is not there yet, so there is always a config
+        # file in use and "Save" always has a destination.
+        doc = config.ensure_plan(plan_path)
+    except (config.ConfigError, OSError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 2
 
@@ -76,7 +96,15 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 4
 
-    ui.run(doc)
+    # Reopening this plan next time is the expected behaviour, so record it now
+    # rather than only on a successful save.
+    state.remember(doc.path)
+    try:
+        session.save(state)
+    except OSError:
+        pass  # a read-only config folder must not stop the app from starting
+
+    ui.run(doc, state)
     return 0
 
 

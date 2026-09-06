@@ -13,12 +13,16 @@ from __future__ import annotations
 
 import calendar as _calendar
 import os
+import sys
 import tkinter as tk
+import traceback
 from datetime import date, timedelta
 from tkinter import filedialog, font as tkfont, messagebox, ttk
 
 from . import config as config_module
 from . import imaging
+from . import paths
+from . import session as session_module
 from . import theme as theme_module
 from .model import MONDAY, SUNDAY, ShiftConflict, TripCalendar, WEEKDAY_HEADERS
 from .version import BUILD_TIMESTAMP, __version__, version_banner
@@ -170,25 +174,31 @@ class DayCell:
 class TripCalendarApp(tk.Tk):
     """The main window."""
 
-    def __init__(self, doc: config_module.Document) -> None:
+    def __init__(
+        self,
+        doc: config_module.Document,
+        state: session_module.AppState | None = None,
+    ) -> None:
         super().__init__()
         self.doc = doc
+        self.state = state if state is not None else session_module.AppState()
         self.palette = theme_module.get(doc.settings.theme)
         self.selected: date | None = None
         self.cells: dict[date, DayCell] = {}
         self.rows: list[list[date]] = []
-        self.dirty = False
         self._building = False
+        # Whether there is unsaved work is decided by comparing the plan against
+        # what was last written, not by a flag that events can leave stuck on.
+        self._saved_fingerprint = config_module.fingerprint(doc)
 
         self.title(f"{doc.settings.title} — Trip Calendar {version_banner()}")
         self.minsize(900, 560)
-        if doc.settings.window:
+        self.geometry("1360x880")
+        if self.state.window:
             try:
-                self.geometry(doc.settings.window)
+                self.geometry(self.state.window)
             except tk.TclError:
-                self.geometry("1360x880")
-        else:
-            self.geometry("1360x880")
+                pass  # a stale geometry string must not stop the app opening
 
         self._build_fonts()
         self._build_styles()
@@ -198,6 +208,20 @@ class TripCalendarApp(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self._bind_shortcuts()
+
+    def report_callback_exception(self, exc, value, tb) -> None:
+        """Show what went wrong rather than printing to a console nobody sees."""
+        details = "".join(traceback.format_exception(exc, value, tb))
+        print(details, file=sys.stderr)
+        try:
+            messagebox.showerror(
+                "Something went wrong",
+                f"{value}\n\nThe window is still open; your plan has not been "
+                f"changed by this error.\n\n{details[-1500:]}",
+                parent=self,
+            )
+        except tk.TclError:  # pragma: no cover - the dialog itself failed
+            pass
 
     # ------------------------------------------------------------ calendar
 
@@ -545,9 +569,9 @@ class TripCalendarApp(tk.Tk):
             text=f"{cal.start.strftime(fmt)}  –  {cal.end.strftime(fmt)}      "
             f"{cal.week_count} weeks · {cal.day_count} days"
         )
+        marker = "*" if self.is_dirty() else ""
         self.title(
-            f"{'*' if self.dirty else ''}{self.doc.settings.title} — "
-            f"Trip Calendar {version_banner()}"
+            f"{marker}{self.doc.settings.title} — Trip Calendar {version_banner()}"
         )
         self.refresh_status()
 
@@ -558,7 +582,7 @@ class TripCalendarApp(tk.Tk):
         parts.append(os.path.basename(self.doc.path))
         if self.selected:
             parts.append(f"selected {self.selected.strftime(self.doc.settings.date_format)}")
-        if self.dirty:
+        if self.is_dirty():
             parts.append("unsaved changes")
         if message:
             parts.append(message)
@@ -582,8 +606,18 @@ class TripCalendarApp(tk.Tk):
         self._autosize_row(self._row_of(cell.day))
         self.mark_dirty()
 
+    def is_dirty(self) -> bool:
+        """True when the plan differs from what was last written to disk.
+
+        Derived rather than remembered, so a save always clears it and a stray
+        widget event can never leave the app convinced it has unsaved work.
+        """
+        return config_module.fingerprint(self.doc) != self._saved_fingerprint
+
+    def mark_saved(self) -> None:
+        self._saved_fingerprint = config_module.fingerprint(self.doc)
+
     def mark_dirty(self, message: str = "") -> None:
-        self.dirty = True
         self.refresh_header()
         if message:
             self.refresh_status(message)
@@ -639,7 +673,6 @@ class TripCalendarApp(tk.Tk):
     def _after_shift(self, result) -> None:
         self.doc.record(result.summary)
         self.selected = result.anchor + timedelta(days=result.direction)
-        self.dirty = True
         self.rebuild()
         moved = self.cells.get(self.selected)
         if moved is not None:  # keep typing where the text ended up
@@ -650,14 +683,12 @@ class TripCalendarApp(tk.Tk):
         self.flush()
         self.calendar.prepend_week()
         self.doc.record("Added a week at the start")
-        self.dirty = True
         self.rebuild()
 
     def action_week_end(self) -> None:
         self.flush()
         self.calendar.append_week()
         self.doc.record("Added a week at the end")
-        self.dirty = True
         self.rebuild()
 
     def action_trim(self) -> None:
@@ -667,7 +698,6 @@ class TripCalendarApp(tk.Tk):
             self.refresh_status("No empty weeks to trim")
             return
         self.doc.record(f"Trimmed {removed} empty week(s)")
-        self.dirty = True
         self.rebuild()
 
     def action_clear_day(self) -> None:
@@ -688,7 +718,6 @@ class TripCalendarApp(tk.Tk):
         self._build_styles()
         self._restyle_chrome()
         self.doc.record(f"Switched theme to {name}")
-        self.dirty = True
         self.rebuild()
 
     def _restyle_chrome(self) -> None:
@@ -705,29 +734,41 @@ class TripCalendarApp(tk.Tk):
         self.grid_frame.configure(background=palette.page)
         self.status.configure(background=palette.page, foreground=palette.muted)
 
-    def action_save(self) -> None:
+    def action_save(self) -> bool:
+        """Write the plan. Returns whether it actually reached the disk.
+
+        Every failure is reported: a save that quietly does nothing is worse
+        than one that says why, because the work looks safe when it is not.
+        """
         self.flush()
         try:
             path = config_module.save(self.doc)
-        except OSError as exc:
-            messagebox.showerror("Could not save", str(exc), parent=self)
-            return
-        self.dirty = False
+        except Exception as exc:  # noqa: BLE001 - the user must hear about any of them
+            messagebox.showerror(
+                "Could not save",
+                f"The plan was not written.\n\n{self.doc.path}\n\n{exc}",
+                parent=self,
+            )
+            return False
+        self.mark_saved()
+        self.remember_plan()
         self.refresh_header()
-        self.refresh_status(f"Saved to {os.path.basename(path)}")
+        self.refresh_status(f"Saved to {path}")
+        return True
 
-    def action_save_as(self) -> None:
+    def action_save_as(self) -> bool:
         path = filedialog.asksaveasfilename(
             parent=self,
             title="Save trip calendar",
             defaultextension=".xml",
             filetypes=[("Trip calendar XML", "*.xml"), ("All files", "*.*")],
-            initialfile=os.path.basename(self.doc.path),
+            initialdir=paths.ensure_config_dir(),
+            initialfile=os.path.basename(self.doc.path) or paths.DEFAULT_PLAN_NAME,
         )
         if not path:
-            return
+            return False
         self.doc.path = path
-        self.action_save()
+        return self.action_save()
 
     def action_open(self) -> None:
         if not self.confirm_discard():
@@ -736,12 +777,13 @@ class TripCalendarApp(tk.Tk):
             parent=self,
             title="Open trip calendar",
             filetypes=[("Trip calendar XML", "*.xml"), ("All files", "*.*")],
+            initialdir=paths.ensure_config_dir(),
         )
         if not path:
             return
         try:
             doc = config_module.load(path)
-        except config_module.ConfigError as exc:
+        except (config_module.ConfigError, OSError) as exc:
             messagebox.showerror("Could not open", str(exc), parent=self)
             return
         self.adopt(doc)
@@ -749,18 +791,48 @@ class TripCalendarApp(tk.Tk):
     def action_new(self) -> None:
         if not self.confirm_discard():
             return
-        self.adopt(config_module.new_document(self.doc.path))
+        path = filedialog.asksaveasfilename(
+            parent=self,
+            title="New trip calendar",
+            defaultextension=".xml",
+            filetypes=[("Trip calendar XML", "*.xml"), ("All files", "*.*")],
+            initialdir=paths.ensure_config_dir(),
+            initialfile="new_trip.xml",
+        )
+        if not path:
+            return
+        doc = config_module.new_document(path)
+        doc.record("Created a new plan")
+        self.adopt(doc)
+        self.action_save()  # the new plan exists on disk straight away
 
     def adopt(self, doc: config_module.Document) -> None:
         self.doc = doc
         self.palette = theme_module.get(doc.settings.theme)
         self.selected = None
-        self.dirty = False
+        self.mark_saved()
+        self.remember_plan()
         self._build_fonts()
         self._build_styles()
         self._restyle_chrome()
         self.rebuild()
-        self.refresh_status(f"Opened {os.path.basename(doc.path)}")
+        self.refresh_status(f"Opened {doc.path}")
+
+    def remember_plan(self) -> None:
+        """Record this plan as the one to reopen next time the app starts."""
+        self.state.remember(self.doc.path)
+        self.save_app_state()
+
+    def save_app_state(self) -> None:
+        """Persist window and last-file state. Never blocks anything."""
+        try:
+            self.state.window = self.winfo_geometry()
+        except tk.TclError:
+            pass
+        try:
+            session_module.save(self.state)
+        except OSError:
+            pass  # a read-only config folder is not worth interrupting anyone over
 
     def action_export(self) -> None:
         if not imaging.available():
@@ -773,6 +845,7 @@ class TripCalendarApp(tk.Tk):
             title="Save calendar as image",
             defaultextension=".jpg",
             filetypes=[("JPEG image", "*.jpg *.jpeg"), ("All files", "*.*")],
+            initialdir=paths.app_dir(),
             initialfile=suggested,
         )
         if not path:
@@ -796,6 +869,7 @@ class TripCalendarApp(tk.Tk):
             f"Built {BUILD_TIMESTAMP}",
             "",
             f"File: {self.doc.path}",
+            f"Config folder: {paths.config_dir()}",
             f"Revision: {self.doc.revision}",
             f"Last saved: {self.doc.saved_at or 'never'}",
         ]
@@ -806,30 +880,61 @@ class TripCalendarApp(tk.Tk):
     # -------------------------------------------------------------- close
 
     def confirm_discard(self) -> bool:
-        if not self.dirty:
+        """Ask about unsaved work. False means "stay where you are"."""
+        self.flush()  # the check reads the model, so the boxes must be in it first
+        if not self.is_dirty():
             return True
         answer = messagebox.askyesnocancel(
             "Unsaved changes",
-            "Save the current plan before continuing?",
+            f"Save changes to this plan before continuing?\n\n{self.doc.path}",
             parent=self,
         )
-        if answer is None:
+        if answer is None:  # Cancel
             return False
-        if answer:
-            self.action_save()
+        if answer and not self.action_save():
+            # The save failed and has already said why. Let them decide whether
+            # to carry on and lose the changes, rather than trapping them.
+            return messagebox.askokcancel(
+                "Continue without saving?",
+                "The plan could not be saved. Continue anyway and lose the "
+                "changes made since the last save?",
+                icon="warning",
+                default=messagebox.CANCEL,
+                parent=self,
+            )
         return True
 
     def on_close(self) -> None:
-        self.flush()
-        if not self.confirm_discard():
-            return
+        """Close the window. Only an explicit Cancel keeps it open.
+
+        Anything that goes wrong on the way out is reported and then ignored:
+        a failure to tidy up must never leave the user with a window they
+        cannot close.
+        """
         try:
-            self.doc.settings.window = self.winfo_geometry()
-            if not self.dirty:
-                config_module.save(self.doc)
-        except (OSError, tk.TclError):
+            self.flush()
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+        try:
+            if not self.confirm_discard():
+                return  # the only path that keeps the window open
+        except Exception:  # noqa: BLE001 - a broken prompt must not trap anyone
+            traceback.print_exc()
+        try:
+            self.save_app_state()
+        except Exception:  # noqa: BLE001
+            traceback.print_exc()
+        self.shutdown()
+
+    def shutdown(self) -> None:
+        try:
+            self.destroy()
+        except tk.TclError:  # pragma: no cover - already torn down
             pass
-        self.destroy()
+        try:
+            self.quit()  # belt and braces: leave the mainloop even if destroy failed
+        except tk.TclError:  # pragma: no cover
+            pass
 
 
 class SettingsDialog(tk.Toplevel):
@@ -944,7 +1049,6 @@ class SettingsDialog(tk.Toplevel):
             f"Settings updated: {cal.start.isoformat()} → {cal.end.isoformat()}, "
             f"week starts {cal.first_day}, theme {theme_name}"
         )
-        app.dirty = True
         app._build_fonts()
         app._build_styles()
         app._restyle_chrome()
@@ -954,5 +1058,7 @@ class SettingsDialog(tk.Toplevel):
         self.destroy()
 
 
-def run(doc: config_module.Document) -> None:
-    TripCalendarApp(doc).mainloop()
+def run(
+    doc: config_module.Document, state: session_module.AppState | None = None
+) -> None:
+    TripCalendarApp(doc, state).mainloop()

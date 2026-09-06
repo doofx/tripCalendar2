@@ -16,7 +16,7 @@ from tripcalendar import config  # noqa: E402
 
 D = date.fromisoformat
 EXAMPLE = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "example_trip.xml"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "config", "example_trip.xml"
 )
 
 

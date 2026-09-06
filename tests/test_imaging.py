@@ -238,7 +238,7 @@ class Rendering(unittest.TestCase):
         from PIL import Image
 
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        doc = config.load(os.path.join(here, "example_trip.xml"))
+        doc = config.load(os.path.join(here, "config", "example_trip.xml"))
         with tempfile.TemporaryDirectory() as tmp:
             path = imaging.render(doc, os.path.join(tmp, "out.jpg"), scale=1.0)
             self.assertTrue(os.path.exists(path))

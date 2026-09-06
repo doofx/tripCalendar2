@@ -13,10 +13,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-__version__ = "1.0.1"
+__version__ = "1.0.2"
 
 #: When this version of the application was cut (UTC, ISO-8601).
-BUILD_TIMESTAMP = "2026-09-06T19:45:00+00:00"
+BUILD_TIMESTAMP = "2026-09-06T20:10:00+00:00"
 
 #: Version of the on-disk XML layout. Bump when the schema changes shape.
 SCHEMA_VERSION = 1

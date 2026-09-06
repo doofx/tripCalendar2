@@ -5,6 +5,29 @@ The application writes the same pair into each saved plan (`appVersion`,
 `savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
 always says which version last touched it and when.
 
+## 1.0.2 — 2026-09-06T20:10:00+00:00
+
+Fixes for faults found running the app on Windows.
+
+- **The window would not close.** Closing is now blockable only by choosing
+  Cancel at the unsaved-changes prompt. Anything that fails while shutting down
+  is reported and then ignored rather than trapping the user in the window, and
+  unexpected errors in any button now raise a dialog instead of vanishing into a
+  console nobody is watching.
+- **Saved plans went missing.** Files were written relative to the working
+  directory, which is not the project folder when the app is launched from
+  Explorer or an IDE. Plans now live in a `config` folder beside the
+  application, and the status bar reports the full path a save went to.
+- **"Save" did not clear the unsaved-changes prompt.** Whether there is unsaved
+  work is now derived by comparing the plan against what was last written,
+  instead of a flag that queued widget events could leave stuck on.
+- **The app now reopens the last plan you had open.** Window geometry and the
+  last-opened file moved to `config/app_state.xml`, so moving the window is no
+  longer treated as an edit to the trip.
+- There is always a config file in use: it is created on first run, so Save
+  always has somewhere to go.
+- The sample trip moved to `config/example_trip.xml`.
+
 ## 1.0.1 — 2026-09-06T19:45:00+00:00
 
 - `requirements.txt` now spells out the full runtime dependency set and how to

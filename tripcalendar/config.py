@@ -33,10 +33,9 @@ from dataclasses import dataclass, field, replace
 from datetime import date, timedelta
 from typing import Any
 
+from . import paths
 from .model import SUNDAY, TripCalendar, WEEKDAY_HEADERS, week_start
 from .version import SCHEMA_VERSION, __version__, utc_now_iso
-
-DEFAULT_CONFIG_PATH = "trip_calendar.xml"
 
 #: How many change records to keep in the file before the oldest are dropped.
 HISTORY_LIMIT = 100
@@ -59,7 +58,6 @@ class Settings:
     cell_width: int = 168
     cell_height: int = 132
     font_scale: float = 1.0
-    window: str = ""  # last geometry, e.g. "1400x900+120+60"
 
     def copy(self) -> "Settings":
         return replace(self)
@@ -90,7 +88,7 @@ class Document:
     saved_at: str = ""
     app_version: str = __version__
     history: list[Change] = field(default_factory=list)
-    path: str = DEFAULT_CONFIG_PATH
+    path: str = ""
 
     def record(self, summary: str) -> Change:
         """Append a change record stamped with the version and the time."""
@@ -166,11 +164,10 @@ def parse_settings(root: ET.Element) -> Settings:
             _text(node.find("cellHeight")), fallback.cell_height, int
         ),
         font_scale=_parse_number(_text(node.find("fontScale")), fallback.font_scale, float),
-        window=_text(node.find("window")),
     )
 
 
-def parse_document(root: ET.Element, path: str = DEFAULT_CONFIG_PATH) -> Document:
+def parse_document(root: ET.Element, path: str = "") -> Document:
     if root.tag != "tripCalendar":
         raise ConfigError(f"root element must be <tripCalendar>, got <{root.tag}>")
 
@@ -220,23 +217,40 @@ def parse_document(root: ET.Element, path: str = DEFAULT_CONFIG_PATH) -> Documen
     )
 
 
-def load(path: str = DEFAULT_CONFIG_PATH) -> Document:
+def load(path: str | None = None) -> Document:
     """Load ``path``, or hand back a fresh four-week calendar if it is absent."""
-    if not os.path.exists(path):
-        return new_document(path)
+    target = paths.resolve(path)
+    if not os.path.exists(target):
+        return new_document(target)
     try:
-        root = ET.parse(path).getroot()
+        root = ET.parse(target).getroot()
     except ET.ParseError as exc:
-        raise ConfigError(f"{path} is not valid XML: {exc}") from exc
-    return parse_document(root, path)
+        raise ConfigError(f"{target} is not valid XML: {exc}") from exc
+    return parse_document(root, target)
 
 
-def new_document(path: str = DEFAULT_CONFIG_PATH) -> Document:
+def ensure_plan(path: str | None = None) -> Document:
+    """Load a plan, writing it to disk first if it is not there yet.
+
+    The app is never left without a config file to save into, so "Save" always
+    has somewhere to go and the file exists from the very first run.
+    """
+    target = paths.resolve(path)
+    paths.ensure_config_dir()
+    if os.path.exists(target):
+        return load(target)
+    doc = new_document(target)
+    doc.record("Created a new plan")
+    save(doc, target)
+    return doc
+
+
+def new_document(path: str | None = None) -> Document:
     settings = _default_settings()
     calendar = TripCalendar(
         start=settings.start_week, end=settings.end_week, first_day=settings.first_day
     )
-    return Document(settings=settings, calendar=calendar, path=path)
+    return Document(settings=settings, calendar=calendar, path=paths.resolve(path))
 
 
 # -------------------------------------------------------------------- write
@@ -267,7 +281,6 @@ def build_tree(doc: Document) -> ET.ElementTree:
         ("cellWidth", str(settings.cell_width)),
         ("cellHeight", str(settings.cell_height)),
         ("fontScale", f"{settings.font_scale:g}"),
-        ("window", settings.window),
     ):
         ET.SubElement(node, tag).text = value
 
@@ -290,17 +303,42 @@ def build_tree(doc: Document) -> ET.ElementTree:
             },
         ).text = change.summary
 
-    ET.indent(root, space="  ")
+    try:
+        ET.indent(root, space="  ")  # cosmetic, and only available on Python 3.9+
+    except AttributeError:  # pragma: no cover - older interpreters
+        pass
     return ET.ElementTree(root)
+
+
+def fingerprint(doc: Document) -> tuple:
+    """Everything that counts as unsaved work, and nothing that does not.
+
+    Window geometry is deliberately excluded: moving the window is not an edit
+    to the trip, and must never make the plan look dirty or prompt on exit.
+    """
+    settings = doc.settings
+    return (
+        doc.calendar.start,
+        doc.calendar.end,
+        doc.calendar.first_day,
+        tuple(sorted((day, text) for day, text in doc.calendar.entries.items())),
+        settings.title,
+        settings.theme,
+        settings.date_format,
+        settings.cell_width,
+        settings.cell_height,
+        settings.font_scale,
+    )
 
 
 def save(doc: Document, path: str | None = None) -> str:
     """Write the document, stamping it with the current version and time.
 
     The file is written to a sibling temporary file and then moved into place so
-    an interrupted save can never leave a half-written plan behind.
+    an interrupted save can never leave a half-written plan behind. The returned
+    path is absolute, so callers can always tell the user where it went.
     """
-    target = path or doc.path or DEFAULT_CONFIG_PATH
+    target = paths.resolve(path or doc.path)
     doc.saved_at = utc_now_iso()
     doc.app_version = __version__
     tree = build_tree(doc)
@@ -310,5 +348,5 @@ def save(doc: Document, path: str | None = None) -> str:
     tmp = f"{target}.tmp"
     tree.write(tmp, encoding="utf-8", xml_declaration=True)
     os.replace(tmp, target)
-    doc.path = target
-    return target
+    doc.path = os.path.abspath(target)
+    return doc.path

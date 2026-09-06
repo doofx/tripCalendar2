@@ -167,7 +167,7 @@ class Saving(unittest.TestCase):
 
     def test_the_shipped_example_loads(self):
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        example = os.path.join(here, "example_trip.xml")
+        example = os.path.join(here, "config", "example_trip.xml")
         doc = config.load(example)
         self.assertEqual(doc.calendar.week_count, 5)
         self.assertTrue(doc.calendar.has_text(D("2023-03-01")))
