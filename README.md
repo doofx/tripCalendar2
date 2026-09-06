@@ -62,7 +62,7 @@ python main.py config/example_trip.xml
 ```
 
 1. **Type a plan.** Click 10 March — "Going to Matsumoto" — and add a line. The
-   row grows to fit as you type.
+   box stays the same size; if you outrun it, it scrolls.
 2. **Tighten the range.** Click **Trim empty weeks**. The blank week after the
    flight home disappears, leaving four weeks ending 25 March.
 3. **Absorb a delay.** Kyoto needs one more night. Click **09 March**, then
@@ -73,10 +73,11 @@ python main.py config/example_trip.xml
 4. **Change your mind.** The Arashiyama text now sits on 10 March. Select it and
    click **◀ Move Left** to pull the whole tail back where it was. Had the day
    before held text, you would be asked before it was overwritten.
-5. **Save.** `Ctrl+S` writes the plan back to `config/example_trip.xml`, stamped with
-   the version, a new revision number and the time. The status bar shows all
-   three.
-6. **Export.** `Ctrl+E`, or straight from the shell without opening a window:
+5. **Save.** **Save** writes the plan back to `config/example_trip.xml`, stamped
+   with the version, a new revision number and the time. The status bar shows
+   all three, and the full path it went to.
+6. **Export.** **Save as image**, or straight from the shell without opening a
+   window:
 
 ```bash
 python main.py config/example_trip.xml --export japan.jpg --scale 3
@@ -92,8 +93,8 @@ python main.py my_trip.xml            # a bare name means config/my_trip.xml
 
 Opening a path that does not exist starts an empty four-week calendar beginning
 this week; set the real dates under **Settings**, or edit `startWeek` and
-`endWeek` in the file. Running `python main.py` with no arguments uses
-`trip_calendar.xml` in the current directory.
+`endWeek` in the file. Running `python main.py` with no arguments reopens the
+plan you had open last, falling back to `config/trip_calendar.xml`.
 
 Other command-line options:
 
@@ -213,14 +214,21 @@ an error.
 
 ## Keyboard
 
-| Shortcut | Action |
+The application claims **no keyboard shortcuts of its own**. Every command is on
+a button or in the menus, so nothing can be triggered by a stray keystroke while
+you are typing into a day — a mistyped `Ctrl+←` restructuring the whole trip is
+a lot of damage for one key.
+
+That leaves the keyboard to the day boxes, where the usual editing keys work as
+your platform intends:
+
+| Key | Action inside a day |
 | --- | --- |
-| `Ctrl` + `S` | Save |
-| `Ctrl` + `E` | Export as JPG |
-| `Ctrl` + `O` | Open |
-| `Ctrl` + `←` | Move the selected day and later days one day earlier |
-| `Ctrl` + `→` | Move the selected day and later days one day later |
-| `Ctrl` + `Z` | Undo, within the focused day |
+| `Ctrl` + `←` / `→` | Move the cursor a word at a time |
+| `Ctrl` + `Z` / `Y` | Undo / redo |
+| `Ctrl` + `C` / `X` / `V` | Copy, cut, paste |
+| `Home` / `End` | Start and end of the line |
+| `Tab` | Move to the next day |
 
 ## Layout
 

@@ -5,6 +5,18 @@ The application writes the same pair into each saved plan (`appVersion`,
 `savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
 always says which version last touched it and when.
 
+## 1.0.4 — 2026-09-06T20:50:00+00:00
+
+- **Application keyboard shortcuts removed.** Ctrl+Left and Ctrl+Right were
+  bound application-wide to the day shifts, which took word-by-word cursor
+  movement away from the day boxes and let one keystroke while typing
+  restructure the trip. Ctrl+S, Ctrl+E and Ctrl+O are gone with them, and the
+  menu accelerator labels along with them. Every command remains on a button or
+  in the menus.
+- The day boxes keep their own editing keys — Ctrl+Z, Ctrl+C/X/V, Ctrl+arrow
+  word movement, Home and End — which now behave exactly as the platform
+  intends.
+
 ## 1.0.3 — 2026-09-06T20:35:00+00:00
 
 - **Day boxes are a fixed size.** They no longer grow as you type. A day with

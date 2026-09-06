@@ -360,27 +360,21 @@ class TripCalendarApp(tk.Tk):
 
         file_menu = tk.Menu(menubar, tearoff=0)
         file_menu.add_command(label="New…", command=self.action_new)
-        file_menu.add_command(label="Open…", accelerator="Ctrl+O", command=self.action_open)
+        file_menu.add_command(label="Open…", command=self.action_open)
         file_menu.add_separator()
-        file_menu.add_command(label="Save", accelerator="Ctrl+S", command=self.action_save)
+        file_menu.add_command(label="Save", command=self.action_save)
         file_menu.add_command(label="Save As…", command=self.action_save_as)
-        file_menu.add_command(
-            label="Export as JPG…", accelerator="Ctrl+E", command=self.action_export
-        )
+        file_menu.add_command(label="Export as JPG…", command=self.action_export)
         file_menu.add_separator()
         file_menu.add_command(label="Quit", command=self.on_close)
         menubar.add_cascade(label="File", menu=file_menu)
 
         edit_menu = tk.Menu(menubar, tearoff=0)
         edit_menu.add_command(
-            label="Move day (and later) backward",
-            accelerator="Ctrl+Left",
-            command=self.action_move_left,
+            label="Move day (and later) backward", command=self.action_move_left
         )
         edit_menu.add_command(
-            label="Move day (and later) forward",
-            accelerator="Ctrl+Right",
-            command=self.action_move_right,
+            label="Move day (and later) forward", command=self.action_move_right
         )
         edit_menu.add_separator()
         edit_menu.add_command(label="Clear selected day", command=self.action_clear_day)
@@ -506,11 +500,15 @@ class TripCalendarApp(tk.Tk):
         ).pack(side="left")
 
     def _bind_shortcuts(self) -> None:
-        self.bind_all("<Control-s>", lambda _e: self.action_save())
-        self.bind_all("<Control-e>", lambda _e: self.action_export())
-        self.bind_all("<Control-o>", lambda _e: self.action_open())
-        self.bind_all("<Control-Left>", lambda _e: self.action_move_left())
-        self.bind_all("<Control-Right>", lambda _e: self.action_move_right())
+        """Deliberately empty: the app claims no keyboard shortcuts.
+
+        Application-wide bindings were taking keys away from the day boxes —
+        Ctrl+Left and Ctrl+Right are word-by-word cursor movement while typing,
+        and having them restructure the trip instead is a lot of damage for a
+        keystroke. Every command lives on a button or in the menus, and the
+        text boxes keep their editing keys (Ctrl+Z, Ctrl+C/V, Ctrl+arrow, Home,
+        End) as the platform intends.
+        """
 
     # ------------------------------------------------------------ scrolling
 
