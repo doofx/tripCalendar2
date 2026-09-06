@@ -5,6 +5,22 @@ The application writes the same pair into each saved plan (`appVersion`,
 `savedAt`, `revision`) and keeps a per-document `<history>` of edits, so a plan
 always says which version last touched it and when.
 
+## 1.0.3 — 2026-09-06T20:35:00+00:00
+
+- **Day boxes are a fixed size.** They no longer grow as you type. A day with
+  more text than fits gets a slim scrollbar and scrolls on its own; reaching
+  either end hands the wheel back to the page, so one continuous scroll never
+  gets stuck inside a box. Size is set by `cellHeight` in the settings.
+- **Opening and saving an older file loses nothing.** Settings, whole sections
+  and root attributes this version does not recognise are carried through to
+  the next save untouched, so no format change here can strip anything out of
+  an existing plan. A window position saved by 1.0.0 or 1.0.1 inside the plan
+  is still honoured when there is no `config/app_state.xml` yet.
+- Loading is more forgiving: a missing `<settings>` section falls back to
+  defaults, a single unreadable `<day>` is skipped rather than failing the whole
+  file, and a file from a newer schema opens with a note instead of an error.
+  Anything odd is reported in the status bar.
+
 ## 1.0.2 — 2026-09-06T20:10:00+00:00
 
 Fixes for faults found running the app on Windows.

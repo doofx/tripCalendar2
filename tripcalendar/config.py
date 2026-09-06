@@ -40,6 +40,24 @@ from .version import SCHEMA_VERSION, __version__, utc_now_iso
 #: How many change records to keep in the file before the oldest are dropped.
 HISTORY_LIMIT = 100
 
+#: Settings this version understands. Anything else in a file was put there by
+#: another version and is carried through untouched.
+KNOWN_SETTINGS_TAGS = (
+    "startWeek",
+    "endWeek",
+    "firstDayOfWeek",
+    "title",
+    "theme",
+    "dateFormat",
+    "cellWidth",
+    "cellHeight",
+    "fontScale",
+)
+
+#: Top-level sections and root attributes this version writes itself.
+KNOWN_SECTIONS = ("settings", "days", "history")
+KNOWN_ROOT_ATTRS = ("schemaVersion", "appVersion", "revision", "savedAt")
+
 
 class ConfigError(Exception):
     """The XML file exists but cannot be understood."""
@@ -58,9 +76,12 @@ class Settings:
     cell_width: int = 168
     cell_height: int = 132
     font_scale: float = 1.0
+    #: Settings elements written by another version, kept verbatim so that
+    #: saving here never strips anything out of the user's file.
+    extra: dict[str, str] = field(default_factory=dict)
 
     def copy(self) -> "Settings":
-        return replace(self)
+        return replace(self, extra=dict(self.extra))
 
 
 def _default_settings() -> Settings:
@@ -89,6 +110,12 @@ class Document:
     app_version: str = __version__
     history: list[Change] = field(default_factory=list)
     path: str = ""
+    schema_version: str = str(SCHEMA_VERSION)
+    #: Sections and root attributes from another version, preserved on save.
+    extra_sections: list[ET.Element] = field(default_factory=list)
+    extra_root_attrs: dict[str, str] = field(default_factory=dict)
+    #: Things that were odd but not fatal while loading, for the status bar.
+    warnings: list[str] = field(default_factory=list)
 
     def record(self, summary: str) -> Change:
         """Append a change record stamped with the version and the time."""
@@ -137,11 +164,15 @@ def _parse_number(raw: str, default: Any, cast) -> Any:
 
 
 def parse_settings(root: ET.Element) -> Settings:
-    node = root.find("settings")
-    if node is None:
-        raise ConfigError("<settings> section is missing")
+    """Read <settings>, defaulting anything absent and keeping anything extra.
 
+    A file written by a different version is not an error: unknown elements are
+    carried through to the next save rather than being dropped.
+    """
+    node = root.find("settings")
     fallback = _default_settings()
+    if node is None:
+        return fallback  # an older or hand-written file may have none at all
     start_raw = _text(node.find("startWeek"))
     end_raw = _text(node.find("endWeek"))
     start = _parse_date(start_raw, "startWeek") if start_raw else fallback.start_week
@@ -150,6 +181,12 @@ def parse_settings(root: ET.Element) -> Settings:
     first_day = _text(node.find("firstDayOfWeek"), SUNDAY).lower()
     if first_day not in WEEKDAY_HEADERS:
         first_day = SUNDAY
+
+    extra = {
+        child.tag: (child.text or "").strip()
+        for child in node
+        if child.tag not in KNOWN_SETTINGS_TAGS
+    }
 
     return Settings(
         start_week=start,
@@ -164,6 +201,7 @@ def parse_settings(root: ET.Element) -> Settings:
             _text(node.find("cellHeight")), fallback.cell_height, int
         ),
         font_scale=_parse_number(_text(node.find("fontScale")), fallback.font_scale, float),
+        extra=extra,
     )
 
 
@@ -173,6 +211,7 @@ def parse_document(root: ET.Element, path: str = "") -> Document:
 
     settings = parse_settings(root)
 
+    warnings: list[str] = []
     entries: dict[date, str] = {}
     days_node = root.find("days")
     if days_node is not None:
@@ -180,7 +219,12 @@ def parse_document(root: ET.Element, path: str = "") -> Document:
             raw = day_node.get("date", "")
             if not raw:
                 continue
-            when = _parse_date(raw, "day/@date")
+            try:
+                when = date.fromisoformat(raw)
+            except ValueError:
+                # One unreadable day must not cost the user the whole plan.
+                warnings.append(f"ignored a <day> with an unreadable date: {raw!r}")
+                continue
             text = (day_node.text or "").strip("\n")
             if text.strip():
                 entries[when] = text
@@ -206,6 +250,13 @@ def parse_document(root: ET.Element, path: str = "") -> Document:
                 )
             )
 
+    schema_version = root.get("schemaVersion", str(SCHEMA_VERSION))
+    if _parse_number(schema_version, SCHEMA_VERSION, int) > SCHEMA_VERSION:
+        warnings.append(
+            f"this file was written by a newer version (schema {schema_version}); "
+            "anything unrecognised will be preserved but not shown"
+        )
+
     return Document(
         settings=settings,
         calendar=calendar,
@@ -213,7 +264,15 @@ def parse_document(root: ET.Element, path: str = "") -> Document:
         saved_at=root.get("savedAt", ""),
         app_version=root.get("appVersion", ""),
         history=history[-HISTORY_LIMIT:],
-        path=path,
+        path=paths.resolve(path) if path else "",
+        schema_version=schema_version,
+        extra_sections=[child for child in root if child.tag not in KNOWN_SECTIONS],
+        extra_root_attrs={
+            key: value
+            for key, value in root.attrib.items()
+            if key not in KNOWN_ROOT_ATTRS
+        },
+        warnings=warnings,
     )
 
 
@@ -260,15 +319,16 @@ def build_tree(doc: Document) -> ET.ElementTree:
     doc.sync_settings_from_calendar()
     settings = doc.settings
 
-    root = ET.Element(
-        "tripCalendar",
+    attrs = dict(doc.extra_root_attrs)  # attributes another version put here
+    attrs.update(
         {
             "schemaVersion": str(SCHEMA_VERSION),
             "appVersion": __version__,
             "revision": str(doc.revision),
             "savedAt": doc.saved_at or utc_now_iso(),
-        },
+        }
     )
+    root = ET.Element("tripCalendar", attrs)
 
     node = ET.SubElement(root, "settings")
     for tag, value in (
@@ -282,6 +342,9 @@ def build_tree(doc: Document) -> ET.ElementTree:
         ("cellHeight", str(settings.cell_height)),
         ("fontScale", f"{settings.font_scale:g}"),
     ):
+        ET.SubElement(node, tag).text = value
+    for tag, value in settings.extra.items():
+        # Settings from another version: unread, unchanged, but never dropped.
         ET.SubElement(node, tag).text = value
 
     days_node = ET.SubElement(root, "days")
@@ -302,6 +365,9 @@ def build_tree(doc: Document) -> ET.ElementTree:
                 "version": change.version,
             },
         ).text = change.summary
+
+    for section in doc.extra_sections:
+        root.append(section)  # whole sections from another version, kept intact
 
     try:
         ET.indent(root, space="  ")  # cosmetic, and only available on Python 3.9+

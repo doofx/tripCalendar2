@@ -108,8 +108,12 @@ python main.py --version           # version and build timestamp
 column is Sunday by default; set `firstDayOfWeek` to `monday` if you prefer. The
 range always snaps to whole weeks so the grid stays rectangular.
 
-**Every day is a text box.** Click a day and type. Rows grow to fit the wordiest
-day in the week, so nothing gets clipped as the plan fills up.
+**Every day is a text box.** Click a day and type. Boxes are a fixed size and
+stay that way — the grid never reflows while you are working in it. A day with
+more text than fits grows a slim scrollbar and scrolls on its own; reaching the
+top or bottom of a day hands the wheel back to the page, so one continuous
+scroll never gets trapped inside a box. `cellHeight` in the settings sets how
+tall a day is.
 
 **Move Left / Move Right.** This is the point of the app. Select a day, then:
 
@@ -126,7 +130,9 @@ Nothing is ever silently dropped in either direction.
 
 **Save as image.** *Save as image* writes a JPG. The image is drawn from the plan
 rather than screen-grabbed, so it always contains the whole calendar at full
-resolution regardless of the window size or where you had scrolled to. The same
+resolution regardless of the window size or where you had scrolled to — and
+unlike the on-screen grid it grows each row to fit, so text you would have had
+to scroll for is all visible in the exported image. The same
 render is available headlessly:
 
 ```bash
@@ -190,6 +196,20 @@ Sleep: Tokyo</day>
 
 If a `<day>` falls outside `startWeek`–`endWeek`, the range is widened on load so
 that text is never hidden.
+
+### Files from older versions
+
+Opening and saving an existing plan never loses anything. Settings, whole
+sections and root attributes that this version does not recognise are carried
+through to the next save exactly as they were found, so upgrading cannot strip
+material out of a file — and a plan written here stays readable by an older
+build. A window position saved by 1.0.0 or 1.0.1 inside the plan is still
+honoured until `config/app_state.xml` takes over.
+
+Loading is deliberately forgiving: a missing `<settings>` section falls back to
+defaults, one unreadable `<day>` is skipped rather than failing the whole file,
+and a file from a newer schema opens with a note in the status bar rather than
+an error.
 
 ## Keyboard
 

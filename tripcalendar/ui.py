@@ -92,20 +92,36 @@ class DayCell:
             borderwidth=0,
             padx=7,
             pady=6,
-            height=app.body_lines,
+            height=app.body_lines,  # fixed: every day is the same size, always
             width=1,  # the grid column sets the real width
             undo=True,
             maxundo=200,
         )
-        self.text.pack(fill="both", expand=True)
+        # The scrollbar appears only when a day has more text than fits, so the
+        # grid stays quiet, and it is packed before the text so pack gives it
+        # room instead of letting the text claim the whole cell.
+        self.scroll = ttk.Scrollbar(
+            self.frame,
+            orient="vertical",
+            style="Cell.Vertical.TScrollbar",
+            command=self.text.yview,
+        )
+        self._scroll_shown = False
+        self.text.configure(yscrollcommand=self._on_text_scrolled)
+        self.text.pack(side="left", fill="both", expand=True)
 
         self.text.bind("<FocusIn>", self._on_focus)
         self.text.bind("<<Modified>>", self._on_modified)
         for widget in (self.frame, self.head, self.number, self.month, self.stripe):
             widget.bind("<Button-1>", self._on_click)
-        app.bind_scroll(self.text)
+        # Only the text box itself can swallow the wheel; over the date strip
+        # or the cell border it always scrolls the page.
+        for sequence in ("<MouseWheel>", "<Button-4>", "<Button-5>"):
+            self.text.bind(sequence, self._on_wheel)
         app.bind_scroll(self.frame)
         app.bind_scroll(self.head)
+        app.bind_scroll(self.number)
+        app.bind_scroll(self.month)
 
     # ------------------------------------------------------------- content
 
@@ -118,11 +134,40 @@ class DayCell:
     def value(self) -> str:
         return self.text.get("1.0", "end-1c")
 
-    def display_lines(self) -> int:
-        try:
-            return int(self.text.count("1.0", "end", "displaylines")[0])
-        except (tk.TclError, TypeError, IndexError):  # pragma: no cover - old Tk
-            return len(self.value().splitlines())
+    def overflowing(self) -> bool:
+        """True when the day holds more text than the fixed box can show."""
+        first, last = self.text.yview()
+        return not (first <= 0.0 and last >= 1.0)
+
+    def _on_text_scrolled(self, first: str, last: str) -> None:
+        """Track the view and show the scrollbar only while it is needed."""
+        self.scroll.set(first, last)
+        needed = not (float(first) <= 0.0 and float(last) >= 1.0)
+        if needed and not self._scroll_shown:
+            try:
+                self.scroll.pack(side="right", fill="y", before=self.text)
+            except tk.TclError:  # pragma: no cover - text not packed yet
+                self.scroll.pack(side="right", fill="y")
+            self._scroll_shown = True
+        elif not needed and self._scroll_shown:
+            self.scroll.pack_forget()
+            self._scroll_shown = False
+
+    def _on_wheel(self, event: tk.Event) -> str:
+        """Scroll this day if it has hidden text, otherwise scroll the page.
+
+        Reaching either end of a day hands the wheel back to the page, so one
+        continuous scroll never gets stuck inside a single box.
+        """
+        down = getattr(event, "num", None) == 5 or getattr(event, "delta", 0) < 0
+        step = 1 if down else -1
+        if self.overflowing():
+            first, last = self.text.yview()
+            at_edge = (step < 0 and first <= 0.0) or (step > 0 and last >= 1.0)
+            if not at_edge:
+                self.text.yview_scroll(step, "units")
+                return "break"
+        return self.app.scroll_page(step)
 
     # ------------------------------------------------------------- events
 
@@ -166,10 +211,6 @@ class DayCell:
             foreground=palette.accent_text if selected else palette.muted,
         )
 
-    def set_height(self, lines: int) -> None:
-        if int(self.text["height"]) != lines:
-            self.text.configure(height=lines)
-
 
 class TripCalendarApp(tk.Tk):
     """The main window."""
@@ -194,9 +235,12 @@ class TripCalendarApp(tk.Tk):
         self.title(f"{doc.settings.title} — Trip Calendar {version_banner()}")
         self.minsize(900, 560)
         self.geometry("1360x880")
-        if self.state.window:
+        # Older files kept the window position inside the plan itself; honour it
+        # so upgrading does not throw away where someone had put the window.
+        remembered = self.state.window or doc.settings.extra.get("window", "")
+        if remembered:
             try:
-                self.geometry(self.state.window)
+                self.geometry(remembered)
             except tk.TclError:
                 pass  # a stale geometry string must not stop the app opening
 
@@ -208,6 +252,7 @@ class TripCalendarApp(tk.Tk):
 
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self._bind_shortcuts()
+        self.report_load_warnings()
 
     def report_callback_exception(self, exc, value, tb) -> None:
         """Show what went wrong rather than printing to a console nobody sees."""
@@ -298,6 +343,15 @@ class TripCalendarApp(tk.Tk):
             background=palette.border,
             troughcolor=palette.page,
             borderwidth=0,
+            arrowcolor=palette.muted,
+        )
+        style.configure(
+            "Cell.Vertical.TScrollbar",
+            background=palette.border,
+            troughcolor=palette.surface_alt,
+            borderwidth=0,
+            arrowsize=9,
+            width=9,
             arrowcolor=palette.muted,
         )
 
@@ -466,13 +520,12 @@ class TripCalendarApp(tk.Tk):
         widget.bind("<Button-5>", self._on_wheel)
 
     def _on_wheel(self, event: tk.Event) -> str:
-        if getattr(event, "num", None) == 4:
-            delta = -1
-        elif getattr(event, "num", None) == 5:
-            delta = 1
-        else:
-            delta = -1 if event.delta > 0 else 1
-        self.canvas.yview_scroll(delta, "units")
+        down = getattr(event, "num", None) == 5 or getattr(event, "delta", 0) < 0
+        return self.scroll_page(1 if down else -1)
+
+    def scroll_page(self, step: int) -> str:
+        """Scroll the week grid. Day cells hand the wheel back to this."""
+        self.canvas.yview_scroll(step, "units")
         return "break"
 
     def _on_canvas_resize(self, event: tk.Event) -> None:
@@ -525,7 +578,6 @@ class TripCalendarApp(tk.Tk):
 
             if self.selected not in self.cells:
                 self.selected = None
-            self._autosize_all()
             self.restyle_cells()
             self.refresh_header()
         finally:
@@ -533,28 +585,6 @@ class TripCalendarApp(tk.Tk):
         self.after_idle(
             lambda: self.canvas.configure(scrollregion=self.canvas.bbox("all"))
         )
-
-    def _autosize_all(self) -> None:
-        for row_index in range(len(self.rows)):
-            self._autosize_row(row_index)
-
-    def _autosize_row(self, row_index: int) -> None:
-        """Give every cell in a week the height of its wordiest day."""
-        if not (0 <= row_index < len(self.rows)):
-            return
-        week = self.rows[row_index]
-        tallest = self.body_lines
-        for day in week:
-            cell = self.cells.get(day)
-            if cell is not None:
-                tallest = max(tallest, cell.display_lines())
-        for day in week:
-            cell = self.cells.get(day)
-            if cell is not None:
-                cell.set_height(tallest)
-
-    def _row_of(self, day: date) -> int:
-        return (day - self.calendar.start).days // 7
 
     def restyle_cells(self) -> None:
         today = date.today()
@@ -603,7 +633,6 @@ class TripCalendarApp(tk.Tk):
         if self._building:
             return
         self.calendar.set(cell.day, cell.value())
-        self._autosize_row(self._row_of(cell.day))
         self.mark_dirty()
 
     def is_dirty(self) -> bool:
@@ -816,7 +845,14 @@ class TripCalendarApp(tk.Tk):
         self._build_styles()
         self._restyle_chrome()
         self.rebuild()
-        self.refresh_status(f"Opened {doc.path}")
+        self.report_load_warnings(f"Opened {doc.path}")
+
+    def report_load_warnings(self, otherwise: str = "") -> None:
+        """Say what was odd about the file, without getting in the way."""
+        if self.doc.warnings:
+            self.refresh_status("; ".join(self.doc.warnings))
+        elif otherwise:
+            self.refresh_status(otherwise)
 
     def remember_plan(self) -> None:
         """Record this plan as the one to reopen next time the app starts."""
